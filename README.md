@@ -4,7 +4,19 @@ Script to concatenate JSON configs based on inherited settings.
 
 ## Overview
 
-`orca-json-concat.sh` resolves and flattens the **inheritance chain** of OrcaSlicer JSON profile files. OrcaSlicer profiles can reference a parent profile via the `"inherits"` key. This script walks that chain from child to root, then merges every file in order (root → child) so that child values override parent values. The result is a single, self-contained JSON file with no remaining `"inherits"` reference.
+OrcaSlicer et al, Bambu Studion, Qidi Studio, use JSON files to store profiles. Be it printers, processes or filaments. To keep changes and file sizes to a minimum (I think) they use an dependency/inheritance system on generic profiles, to only adjust the differences we want.
+
+Since recent versions, there is a setting which can dynamically update those generic profiles that your custom profiles depend on...
+
+![The setting in question](.images/json_inherit_001.png)
+
+As a result, this can mean that your print now comes out differently, or even fails because underlying settings have been altered without you knowing. It also makes it very hard to exchange profiles with each other, because one having the setting enabled, and the other not, would mean that the "same" profile has different results on the same printer model... 
+
+We're not in an inherent "Cloud is bad" situation, most folks probably won't notice, but the high-end spectrum of users definitely will, and already have:
+
+![The bed temp was different all of a sudden](.images/json_inherit_002.png)
+
+My script `orca-json-concat.sh` resolves and flattens the **inheritance chain** of OrcaSlicer JSON profile files. OrcaSlicer profiles can reference a parent profile via the `"inherits"` key. This script walks that chain from child to root, then merges every file in order (root → child) so that child values override parent values. The result is a single, self-contained JSON file with no remaining `"inherits"` reference, and will therefore not change if someone decides to alter the "Generic PETG" or "Sunlu ABS" profile for instance.
 
 ## Prerequisites
 
