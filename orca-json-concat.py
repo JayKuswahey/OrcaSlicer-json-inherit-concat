@@ -14,6 +14,7 @@ from pathlib import Path
 from platform import system
 from re import sub
 from sys import exit as sys_exit
+from tempfile import gettempdir
 
 log = getLogger(__name__)
 
@@ -154,7 +155,7 @@ def merge_json_files(files: list[Path]) -> dict:
 
 
 def parse_args() -> ArgumentParser:
-    """Set up and return the argument parser."""
+    """Create and return the argument parser."""
     parser = ArgumentParser(
         description=(
             "Resolve and flatten the inheritance chain of "
@@ -219,8 +220,6 @@ def main() -> None:
     if args.target_location:
         target_location = Path(args.target_location)
     else:
-        from tempfile import gettempdir
-
         target_location = Path(gettempdir())
 
     echodate_debug("Setting up global variables")
