@@ -18,14 +18,76 @@ We're not in an inherent "Cloud is bad" situation, most folks probably won't not
 
 My script `orca-json-concat.sh` resolves and flattens the **inheritance chain** of OrcaSlicer JSON profile files. OrcaSlicer profiles can reference a parent profile via the `"inherits"` key. This script walks that chain from child to root, then merges every file in order (root → child) so that child values override parent values. The result is a single, self-contained JSON file with no remaining `"inherits"` reference, and will therefore not change if someone decides to alter the "Generic PETG" or "Sunlu ABS" profile for instance.
 
-## Prerequisites
+Two implementations are available:
+
+| Script | Requirements |
+|---|---|
+| `orca-json-concat.py` | Python 3.10+ (no external dependencies) — **cross-platform** (macOS, Linux, Windows) |
+| `orca-json-concat.sh` | Bash + [jq](https://stedolan.github.io/jq/) — macOS / Linux only |
+
+---
+
+## Python version (`orca-json-concat.py`)
+
+### Prerequisites
+
+| Requirement | Details |
+|---|---|
+| **Python** | 3.10 or later |
+
+Install (optional — no external packages are required):
+
+```bash
+pip install -r requirements.txt
+```
+
+### Usage
+
+```bash
+python orca-json-concat.py -f <file> -c <component> [-l <profilesLocation>] [-t <targetLocation>] [-d]
+```
+
+### Parameters
+
+| Flag | Name | Required | Description |
+|---|---|---|---|
+| `-f` / `--file` | file | **Yes** | Path to the starting JSON profile file whose inheritance chain you want to flatten. |
+| `-c` / `--component` | component | **Yes** | The OrcaSlicer component type (e.g. `process`, `filament`, `machine`). Used to locate default profiles and to name the output file. |
+| `-l` / `--profiles-location` | profilesLocation | No | Directory where OrcaSlicer's built-in system profiles live. Defaults are platform-specific (see below). |
+| `-t` / `--target-location` | targetLocation | No | Directory where the merged output file will be written. **Default:** system temp directory. |
+| `-d` / `--debug` | debug | No | Enable verbose debug logging. |
+
+#### Default profiles location per platform
+
+| Platform | Default path |
+|---|---|
+| macOS | `~/Library/Application Support/OrcaSlicer/system/BBL/<component>` |
+| Linux | `~/.config/OrcaSlicer/system/BBL/<component>` |
+| Windows | `%APPDATA%/OrcaSlicer/system/BBL/<component>` |
+
+### Example
+
+```bash
+python orca-json-concat.py \
+  -f "Sunlu Pla +.json" \
+  -c process \
+  -l "/home/jaykay/.config/orca" \
+  -t "/opt/hereIsWhereIwantIt" \
+  -d
+```
+
+---
+
+## Bash version (`orca-json-concat.sh`)
+
+### Prerequisites
 
 | Requirement | Details |
 |---|---|
 | **Bash** | A Bash-compatible shell (tested with `#!/usr/bin/env bash`) |
 | **jq** | [jq](https://stedolan.github.io/jq/) must be installed and available on your `$PATH` |
 
-## Usage
+### Usage
 
 ```bash
 ./orca-json-concat.sh -f <fileToCheck> -c <componentName> [-l <orcaProfilesLocation>] [-t <targetLocation>] [-d true]
@@ -37,7 +99,7 @@ My script `orca-json-concat.sh` resolves and flattens the **inheritance chain** 
 |---|---|---|---|
 | `-f` | `fileToCheck` | **Yes** | Path to the starting JSON profile file whose inheritance chain you want to flatten. |
 | `-c` | `componentName` | **Yes** | The OrcaSlicer component type (e.g. `process`, `filament`, `machine`). Used to locate default profiles and to name the output file. |
-| `-l` | `orcaProfilesLocation` | No | Directory where OrcaSlicer's built-in system profiles live. **Default (macOS):** `~/Library/Application Support/OrcaSlicer/system/BBL/<componentName>` (the `~` is resolved to the current user's home directory automatically). On Linux you must supply the correct path manually. |
+| `-l` | `orcaProfilesLocation` | No | Directory where OrcaSlicer's built-in system profiles live. **Default (macOS):** `~/Library/Application Support/OrcaSlicer/system/BBL/<componentName>`. On Linux you must supply the correct path manually. |
 | `-t` | `targetLocation` | No | Directory where the merged output file will be written. **Default:** `/tmp`. |
 | `-d` | Debug mode | No | Enables verbose debug logging. The flag accepts an argument (e.g. `-d true`) but the value itself is ignored — any value activates debug mode. To disable debug output, omit `-d` entirely; passing `-d false` will **still enable** debug mode. |
 
@@ -54,33 +116,35 @@ My script `orca-json-concat.sh` resolves and flattens the **inheritance chain** 
 
 > **Tip:** Always quote file paths and names, especially when they contain spaces or special characters.
 
+---
+
 ## How It Works
 
-1. **Read the starting file** – The script reads the JSON file supplied with `-f` and extracts its `"inherits"` value using `jq`.
-2. **Walk the inheritance chain** – For each inherited profile name found, the script looks for a matching `.json` file in the following order:
+1. **Read the starting file** – Extract the `"inherits"` value from the supplied JSON file.
+2. **Walk the inheritance chain** – For each inherited profile name, look for a matching `.json` file in:
    - The **current working directory** (`./<inherited_name>.json`).
-   - The **OrcaSlicer system profiles directory** (`<orcaProfilesLocation>/<inherited_name>.json`).
-   
-   The process repeats until a file without an `"inherits"` key (the root ancestor) is reached.
+   - The **OrcaSlicer system profiles directory** (`<profilesLocation>/<inherited_name>.json`).
+
+   Repeat until a file without an `"inherits"` key (the root ancestor) is reached.
 3. **Reverse the dependency order** – The collected chain (child → root) is reversed to root → child so that child settings correctly override parent settings during the merge.
-4. **Merge with jq** – All files are merged using `jq -s 'add'`. The resulting JSON:
+4. **Merge** – All files are merged in order. The resulting JSON:
    - Has the `"inherits"` key **removed** (it is no longer needed).
    - Has all keys **lowercased** and **sorted alphabetically**.
 5. **Write the output** – The merged profile is written to:
    ```
-   <targetLocation>/orcaslicer_<componentName>_<sanitisedFileName>_inherit_concat-<YYYYmmdd-HHMMSS>.json
+   <targetLocation>/orcaslicer_<component>_<sanitisedFileName>_inherit_concat-<YYYYmmdd-HHMMSS>.json
    ```
 
 ## Exit Codes
 
 | Code | Meaning |
 |---|---|
-| `0` | Success – the merged file was created and variables were cleaned up. |
-| `10` | No file was specified (`-f` is missing). |
+| `0` | Success – the merged file was created. |
+| `10` | No file was specified (`-f` is missing) or the file does not exist. |
 | `11` | No component name was specified (`-c` is missing). |
 | `12` | The starting file does not contain an `"inherits"` key; there is nothing to merge. |
-| `20` | An inherited file could not be found in either the current directory or the OrcaSlicer profiles directory. |
-| Non-zero | `jq` or cleanup failed; the exit code from the failing command is forwarded. |
+| `20` | An inherited file could not be found in either the current directory or the profiles directory. |
+| Non-zero | A merge or cleanup step failed; the exit code from the failing command is forwarded. |
 
 ## Output
 
